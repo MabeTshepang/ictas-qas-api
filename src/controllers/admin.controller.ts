@@ -97,7 +97,56 @@ export const getDashboardStats = async (req: Request, res: Response) => {
   }
 };
 
+export const getModDashboardStats = async (req: Request, res: Response) => {
+  try {
+    // 1. Fetch all tenants to ensure we have names
+    const tenants = await prisma.tenant.findMany({
+      include: {
+        _count: {
+          select: { users: true }
+        }
+      }
+    });
 
+    // 2. Aggregate Log Data (Uploads, Pending, Failed)
+    // We group by tenantId and status to get counts for each category
+    const logStats = await prisma.log.groupBy({
+      by: ['tenantId', 'status'],
+      _count: {
+        id: true
+      },
+      where: {
+        action: 'File Upload' // Only count file-related events
+      }
+    });
+
+    // 3. Get Total Security Events (Logins, failures, etc. across platform)
+    const totalEvents = await prisma.log.count();
+
+    // 4. Format the data for the Frontend table
+    const formattedStats = tenants.map(tenant => {
+      const tenantLogs = logStats.filter(l => l.tenantId === tenant.id);
+      
+      return {
+        tenantId: tenant.id,
+        name: tenant.name,
+        userCount: tenant._count.users,
+        uploadCount: tenantLogs.reduce((acc, curr) => acc + curr._count.id, 0),
+        pendingCount: tenantLogs.find(l => l.status === 'Pending')?._count.id || 0,
+        failedCount: tenantLogs.find(l => l.status === 'Failed')?._count.id || 0,
+        sentCount: tenantLogs.find(l => l.status === 'Sent')?._count.id || 0,
+      };
+    });
+
+    res.json({
+      tenants: formattedStats,
+      totalEvents
+    });
+  } catch (error: any) {
+    console.error("STATS_ERROR:", error.message);
+    res.status(500).json({ error: "Failed to compile platform statistics" });
+  }
+};
 
 // --- LOG/FILE MANAGEMENT (CRUD) ---
 

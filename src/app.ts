@@ -58,7 +58,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api', userRoutes);
 
 // This preserves /api/tenants/public and /tenants
-app.use('/', tenantRoutes);
+app.use('/api/tenants', tenantRoutes);
 
 // --- 6. Error Handling ---
 app.use(globalErrorHandler);

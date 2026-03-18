@@ -10,7 +10,7 @@ const router = Router();
 
 // Apply Auth and Admin role to all routes in this file
 router.use(authenticate);
-router.use(authorize(['ADMIN']));
+router.use(authorize(['ADMIN', 'MODERATOR']));
 
 // Dashboard Metrics
 router.get('/stats', getDashboardStats);

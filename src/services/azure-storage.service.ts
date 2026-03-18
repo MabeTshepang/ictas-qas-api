@@ -24,6 +24,33 @@ export const uploadToAzure = async (fileBuffer: Buffer, fileName: string, tenant
 
   return blockBlobClient.url; // Returns the permanent URL (accessible via SAS later)
 };
+export const uploadBrandingToAzure = async (fileBuffer: Buffer, fileName: string) => {
+  if (!AZURE_CONNECTION_STRING) {
+    throw new Error("Azure Storage Connection String is missing");
+  }
+
+  const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_CONNECTION_STRING);
+  const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
+
+  await containerClient.createIfNotExists();
+
+  const extension = path.extname(fileName).toLowerCase();
+  let contentType = "application/octet-stream";
+  
+  if (extension === ".jpg" || extension === ".jpeg") contentType = "image/jpeg";
+  else if (extension === ".png") contentType = "image/png";
+
+  const blobPath = `branding/${fileName}`;
+  const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
+
+  await blockBlobClient.uploadData(fileBuffer, {
+    blobHTTPHeaders: { 
+      blobContentType: contentType,
+      blobCacheControl: "max-age=3600" 
+    }
+  });
+  return blockBlobClient.url;
+};
 export const downloadFromAzure = async (blobUrl: string): Promise<Buffer> => {
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
   if (!connectionString) throw new Error("Azure Connection String missing");
