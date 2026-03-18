@@ -1,0 +1,220 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ICTAS Multi-Tenant API",
+    "version": "1.0.0",
+    "description": "Secure Document Pipeline with Multi-Tenant RBAC for BAMB, ZAMACE, and Spectrum Systems."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Tenant": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "47225c56-658b-497d-947b-123456789abc" },
+          "name": { "type": "string", "example": "BAMB" },
+          "subtitle": { "type": "string", "example": "Botswana Agricultural Marketing Board" },
+          "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+          "type": { "type": "string", "enum": ["NORMAL", "MODERATOR"] },
+          "branding": {
+            "type": "object",
+            "properties": {
+              "overlayColor": { "type": "string", "example": "from-green-900/80" },
+              "imageKey": { "type": "string", "example": "bgAgri" }
+            }
+          },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Authenticate user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful - returns JWT and User/Tenant context" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/user/password": {
+      "patch": {
+        "tags": ["Auth"],
+        "summary": "Update own password",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": { "type": "string" },
+                  "newPassword": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Password updated" } }
+      }
+    },
+    "/api/admin/tenants": {
+      "get": {
+        "tags": ["Admin - Tenants"],
+        "summary": "Get all tenants",
+        "description": "Moderator access only. List all organizations in the platform.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "List of tenants",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Tenant" } }
+              }
+            }
+          },
+          "403": { "description": "Requires MODERATOR role" }
+        }
+      }
+    },
+    "/api/admin/tenants/public": {
+          "get": {
+            "tags": ["Public"],
+            "summary": "Get active organizations",
+            "description": "Public list of tenants for selection on the login screen. No authentication required.",
+            "responses": {
+              "200": {
+                "description": "List of active client tenants",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "name": { "type": "string" },
+                          "subtitle": { "type": "string" },
+                          "branding": { "type": "object" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "tags": ["Admin - General"],
+        "summary": "Get aggregate system statistics",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Stats for charts and counters" } }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": ["Admin - Users"],
+        "summary": "List all users",
+        "description": "Moderator sees all; Admin sees only their tenant's users.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "List of users" } }
+      },
+      "post": {
+        "tags": ["Admin - Users"],
+        "summary": "Create new user",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "201": { "description": "User created" } }
+      }
+    },
+    "/api/admin/users/{id}": {
+      "patch": {
+        "tags": ["Admin - Users"],
+        "summary": "Update user details",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "User updated" } }
+      },
+      "delete": {
+        "tags": ["Admin - Users"],
+        "summary": "Delete user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "User removed" } }
+      }
+    },
+    "/api/files": {
+      "get": {
+        "tags": ["Logs"],
+        "summary": "List all file activity logs",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Array of logs" } }
+      }
+    },
+    "/api/files/{id}": {
+      "get": {
+        "tags": ["Logs"],
+        "summary": "Get specific log details",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Detailed log data" } }
+      },
+      "delete": {
+        "tags": ["Logs"],
+        "summary": "Delete log record",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Log record deleted" } }
+      }
+    },
+    "/api/upload": {
+      "post": {
+        "tags": ["Upload"],
+        "summary": "Upload and process document",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Upload successful" } }
+      }
+    }
+  }
+}
