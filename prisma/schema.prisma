@@ -6,66 +6,77 @@ datasource db {
   provider = "mysql"
 }
 
-enum Role {
-  ADMIN
-  USER
-  MODERATOR
+model log {
+  id        String   @id
+  userId    String
+  action    String
+  status    String
+  metadata  String?  @db.LongText
+  filePath  String?
+  tenantId  String
+  createdAt DateTime @default(now())
+  tenant    tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, map: "Log_tenantId_fkey")
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Log_userId_fkey")
+
+  @@index([tenantId, createdAt], map: "Log_tenantId_createdAt_idx")
+  @@index([userId], map: "Log_userId_fkey")
 }
 
-enum TenantStatus {
+model passwordreset {
+  id        String   @id
+  token     String   @unique(map: "PasswordReset_token_key")
+  userId    String
+  tenantId  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  tenant    tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, map: "PasswordReset_tenantId_fkey")
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "PasswordReset_userId_fkey")
+
+  @@index([tenantId], map: "PasswordReset_tenantId_idx")
+  @@index([userId], map: "PasswordReset_userId_fkey")
+}
+
+model tenant {
+  id            String          @id
+  name          String
+  subtitle      String?
+  status        tenant_status   @default(ACTIVE)
+  type          tenant_type     @default(NORMAL)
+  branding      String?         @db.LongText
+  fileSlug      String
+  createdAt     DateTime        @default(now())
+  log           log[]
+  passwordreset passwordreset[]
+  user          user[]
+}
+
+model user {
+  id            String          @id
+  fullName      String
+  email         String          @unique(map: "User_email_key")
+  passwordHash  String
+  role          user_role       @default(USER)
+  tenantId      String
+  createdAt     DateTime        @default(now())
+  log           log[]
+  passwordreset passwordreset[]
+  tenant        tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade, map: "User_tenantId_fkey")
+
+  @@index([tenantId], map: "User_tenantId_idx")
+}
+
+enum tenant_status {
   ACTIVE
   INACTIVE
 }
-enum TenantType {
-  NORMAL    
-  MODERATOR 
+
+enum tenant_type {
+  NORMAL
+  MODERATOR
 }
 
-model Tenant {
-  id        String   @id @default(cuid())
-  name         String       // e.g., "BAMB"
-  subtitle     String?      // e.g., "Botswana Agricultural Marketing Board"
-  status       TenantStatus @default(ACTIVE)
-  type      TenantType   @default(NORMAL) // <--- Add this line
-  // Stores overlay colors, image paths, etc.
-  branding     Json?        
-  
-  createdAt    DateTime     @default(now())
-
-  // Relations: These allow "lookup" in Prisma
-  users        User[]
-  logs         Log[]
-}
-
-model User {
-  id           String   @id @default(cuid())
-  fullName     String  // Or just String if it's required
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(USER)
-  
-  // Link to Tenant Table
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
-  logs         Log[]
-  createdAt    DateTime @default(now())
-
-  @@index([tenantId])
-}
-
-model Log {
-  id        String   @id @default(cuid())
-  userId    String
-  action    String
-  status    String   // "Sent", "Failed", or "Stored"
-  metadata  Json?
-  filePath  String?
-  
-  // Link to Tenant Table
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
-
-  @@index([tenantId, createdAt])
+enum user_role {
+  ADMIN
+  USER
+  MODERATOR
 }

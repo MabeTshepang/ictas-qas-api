@@ -5,18 +5,15 @@ import helmet from 'helmet';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import * as swaggerDocument from '../swagger.json';
-
-// Configurations & Middleware
 import { globalErrorHandler } from './middleware/error-handler';
-
-// Controllers
-import { login } from './controllers/auth.controller';
+import { login, requestReset, resetPassword } from './controllers/auth.controller';
 
 import adminRoutes from './routes/admin.routes';
 import tenantRoutes from './routes/tenant.routes';
 import userRoutes from './routes/user.routes';
 import router from './routes/user.routes';
 import { getPublicTenants } from './controllers/tenant.controller';
+import { authLimiter } from './middleware/rate-limiter';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',') 
@@ -46,7 +43,9 @@ app.use(cors({
 app.use(express.json());
 
 // 1. Public Auth (Stays in main app or auth.routes)
-app.post('/api/auth/login', login);
+app.post('/api/auth/login', authLimiter, login);
+app.post('/api/auth/forgot-password', authLimiter, requestReset); 
+app.post('/api/auth/reset-password', authLimiter, resetPassword);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.get('/api/tenants/public', getPublicTenants);
 

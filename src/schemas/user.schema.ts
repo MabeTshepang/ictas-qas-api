@@ -10,10 +10,9 @@ export const updatePasswordSchema = z.object({
   newPassword: z.string().min(8).regex(/[A-Z]/, "Must contain an uppercase letter"),
 });
 export const createUserSchema = z.object({
-  fullName: z.string().min(2, "Full name is required"), // Add this
+  fullName: z.string().min(2, "Full name is required"),
   email: z.string().email(),
-  password: z.string().min(8),
-  role: z.enum(['ADMIN', 'USER']),
-  tenantId: z.string().min(1),
+  password: z.string().min(8).optional(), 
+  role: z.enum(['ADMIN', 'USER', 'MODERATOR']),
+  tenantId: z.string().min(1).optional(), 
 });
-

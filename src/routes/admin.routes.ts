@@ -4,7 +4,7 @@ import {
   getDashboardStats, 
   getLogs, 
 } from '../controllers/admin.controller';
-import { createUser, deleteUser, getAllUsers, updateUser } from '../controllers/user.controller';
+import { createUser, deleteUser, getAllModerators, getAllUsers, inviteModerator, removeModerator, updateUser } from '../controllers/user.controller';
 
 const router = Router();
 
@@ -22,4 +22,7 @@ router.post('/users', createUser);
 router.patch('/users/:id', updateUser);
 router.delete('/users/:id', deleteUser);
 
+router.get('/moderator/users', getAllModerators);    
+router.post('/moderator/users', inviteModerator);      
+router.delete('/moderator/users/:id', removeModerator);
 export default router;

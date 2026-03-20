@@ -2,6 +2,8 @@ import { Resend } from 'resend';
 import prisma from '../config/db';
 import { encryptPdfBuffer } from '../utils/pdf-helper';
 import { uploadToAzure } from './azure-storage.service';
+import { getTenantInfo } from '../controllers/tenant.controller';
+import { format } from 'date-fns';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -11,25 +13,26 @@ export const processAndSendPDF = async (fileBuffer: Buffer, user: any, originalN
   let azureUrl: string | null = null;
 
   try {
-    // 1. Encrypt PDF
+    const tenant = await getTenantInfo(user.tenantId);
+
     const encryptedBuffer = await encryptPdfBuffer(fileBuffer);
 
-    // 2. Permanent Storage in Azure (Always store, even if email fails later)
-    const fileName = `pandamatenga_${Date.now()}_${originalName}`;
+    const dateStamp = format(new Date(), 'yyyy-MM-dd');
+    const fileName = `${tenant.fileSlug}_${dateStamp}_${originalName}`;
+
     azureUrl = await uploadToAzure(encryptedBuffer, fileName, user.tenantId);
 
-    // 4. Send via Resend
     const { data, error } = await resend.emails.send({
-      from: `ICTAS BAMB <${process.env.SENDER_EMAIL}>`,
+      from: `ICTAS ${tenant.name} <${process.env.SENDER_EMAIL}>`,
       to: [process.env.RECEIVER_EMAIL || ''],
       cc: [process.env.CCRECEIVER_EMAIL || ''],
       bcc: [process.env.BCCRECEIVER_EMAIL || ''],
-      subject: "ICTAS BAMB - Delivery Note",
-      html: "<strong>Find Attached Pandamatenga BAMB Grain Assessment Form</strong>",
+      subject: `ICTAS ${tenant.name} - Delivery Note`,
+      html: `<strong>Find Attached ${tenant.name} Grain Assessment Form</strong>`,
       attachments: [
         {
-          filename: originalName, // The name of the file (e.g., scan001.pdf)
-          content: encryptedBuffer, // In Node.js, Resend accepts the Buffer directly
+          filename: fileName,
+          content: encryptedBuffer,
         },
       ],
     });
@@ -45,7 +48,6 @@ export const processAndSendPDF = async (fileBuffer: Buffer, user: any, originalN
     metadata = { error: err.message };
     throw err;
   } finally {
-    // 5. ATOMIC AUDIT LOG
     await prisma.log.create({
       data: {
         tenantId: user.tenantId,
@@ -53,7 +55,7 @@ export const processAndSendPDF = async (fileBuffer: Buffer, user: any, originalN
         action: 'File Upload',
         status: status,
         metadata: metadata,
-        filePath: azureUrl, // Now stores the Azure Blob URL
+        filePath: azureUrl,
       },
     });
   }

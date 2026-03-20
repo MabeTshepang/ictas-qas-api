@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
-import { getPublicTenants, getAllTenants, getModDashboardStats, createTenant, deleteTenant, updateTenant } from '../controllers/tenant.controller';
+import { getPublicTenants, getAllTenants, getModDashboardStats, createTenant, deleteTenant, updateTenant, getAllTenantLogs } from '../controllers/tenant.controller';
 import multer from 'multer';
 
 const router = Router();
@@ -10,6 +10,9 @@ const upload = multer({
 });
 // Protected Moderator access
 router.use(authenticate);
+
+router.get('/logs', authenticate, authorize(['MODERATOR', 'ADMIN']), getAllTenantLogs);
+
 router.use(authorize(['MODERATOR']));
 
 router.get('/all', authenticate, authorize(['MODERATOR']), getAllTenants);

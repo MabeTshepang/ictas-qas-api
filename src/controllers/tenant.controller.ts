@@ -3,7 +3,32 @@ import prisma from '../config/db';
 import { uploadBrandingToAzure } from '../services/azure-storage.service';
 import path from 'path';
 import { uploadToImageKit } from '../services/imagekit.service';
+import { hashPassword } from '../config/auth';
 
+interface AuthRequest extends Request {
+  user: {
+    id: string;
+    role: string;
+    tenantId: string;
+  };
+}
+export const getTenantInfo = async (tenantId: string) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        fileSlug: true,
+      },
+    });
+
+    if (!tenant) throw new Error("Tenant context not found");
+    return tenant;
+  } catch (error) {
+    console.error("GET_TENANT_INFO_ERROR:", error);
+    throw error;
+  }
+};
 export const getAllTenants = async (req: Request, res: Response) => {
   try {
     const tenants = await prisma.tenant.findMany({
@@ -20,7 +45,6 @@ export const getAllTenants = async (req: Request, res: Response) => {
         type: true,
         branding: true,
         createdAt: true,
-        // Optional: Count users in each tenant for the moderator dashboard
         _count: {
           select: { users: true }
         }
@@ -39,18 +63,40 @@ export const getAllTenants = async (req: Request, res: Response) => {
     });
   }
 };
+export const getAllTenantLogs = async (req: Request, res: Response) => {
+  const { tenantId, role } = (req as AuthRequest).user;
+
+  try {
+    const logs = await prisma.log.findMany({
+      where: {
+        ...(role !== 'MODERATOR' ? { tenantId } : {}),
+        action: "File Upload"
+      },
+      include: {
+        user: {
+          select: { fullName: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch tenant activity." });
+  }
+};
 export const getPublicTenants = async (req: Request, res: Response) => {
   try {
     const tenants = await prisma.tenant.findMany({
       where: {
         status: 'ACTIVE',
-        type: 'NORMAL' // We still exclude MODERATOR so the public doesn't see the "Admin Console" option
+        type: 'NORMAL' 
       },
       select: {
         id: true,
         name: true,
         subtitle: true,
-        branding: true, // Needed for the login page background/colors
+        branding: true,
       },
       orderBy: {
         name: 'asc'
@@ -65,7 +111,6 @@ export const getPublicTenants = async (req: Request, res: Response) => {
 
 export const getModDashboardStats = async (req: Request, res: Response) => {
   try {
-    // 1. Fetch all tenants to ensure we have names
     const tenants = await prisma.tenant.findMany({
       include: {
         _count: {
@@ -74,8 +119,6 @@ export const getModDashboardStats = async (req: Request, res: Response) => {
       }
     });
 
-    // 2. Aggregate Log Data (Uploads, Pending, Failed)
-    // We group by tenantId and status to get counts for each category
     const logStats = await prisma.log.groupBy({
       by: ['tenantId', 'status'],
       _count: {
@@ -86,10 +129,8 @@ export const getModDashboardStats = async (req: Request, res: Response) => {
       }
     });
 
-    // 3. Get Total Security Events (Logins, failures, etc. across platform)
     const totalEvents = await prisma.log.count();
 
-    // 4. Format the data for the Frontend table
     const formattedStats = tenants.map(tenant => {
       const tenantLogs = logStats.filter(l => l.tenantId === tenant.id);
       
@@ -115,39 +156,67 @@ export const getModDashboardStats = async (req: Request, res: Response) => {
 };
 
 export const createTenant = async (req: Request, res: Response) => {
-  const { name, overlayColor } = req.body;
-  const file = req.file;
+const { name, overlayColor, adminName, adminEmail } = req.body;
+const file = req.file;
 
-  try {
+try {
     if (!file) return res.status(400).json({ error: "Branding image is required" });
+    if (!adminName || !adminEmail) {
+    return res.status(400).json({ error: "Initial admin details (name/email) are required" });
+    }
 
-    const tempSlug = name.toLowerCase().trim().replace(/\s+/g, '-');
-    
-    // Get the extension from the original file (e.g., .jpg)
-    const extension = path.extname(file.originalname); 
-    
-    // Create a full filename with the extension
-    const fullFileName = `${tempSlug}_bg${extension}`;
-
-    // Pass the full filename to Azure
     const imageKey = await uploadToImageKit(file.buffer, file.originalname);
-    const newTenant = await prisma.tenant.create({
-      data: {
+
+    const result = await prisma.$transaction(async (tx) => {
+
+    const tenant = await tx.tenant.create({
+        data: {
         name,
         branding: {
-          imageKey,
-          overlayColor: overlayColor || "from-slate-900/80 to-black/80",
+            imageKey,
+            overlayColor: overlayColor || "from-slate-900/80 to-black/80",
+        },
+        fileSlug: ""
         }
-      }
     });
 
-    res.status(201).json(newTenant);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
+    const newUser = await tx.user.create({
+        data: { 
+        fullName: adminName,
+        email: adminEmail.toLowerCase().trim(),
+        role: 'ADMIN', 
+        tenantId: tenant.id, 
+        passwordHash: await hashPassword("Password123")
+        },
+        select: { 
+        id: true, 
+        fullName: true,
+        email: true, 
+        role: true, 
+        tenantId: true 
+        }
+    });
+
+    return { tenant, admin: newUser };
+    });
+
+    res.status(201).json({
+    message: "Tenant created successfully",
+    tenant: result.tenant,
+    admin: result.admin
+    });
+
+} catch (error: any) {
+    console.error("PROVISIONING_ERROR:", error);
+
+    if (error.code === 'P2002') {
+    return res.status(400).json({ error: "A user with this email address already exists." });
+    }
+
+    res.status(500).json({ error: error.message || "Failed to provision tenant resources" });
+}
 };
 
-// 3. UPDATE TENANT
 export const updateTenant = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { name, overlayColor } = req.body;
@@ -156,7 +225,6 @@ export const updateTenant = async (req: Request, res: Response) => {
   try {
     let updateData: any = { name };
     
-    // If a new image is uploaded, process it
     if (file) {
       const fileName = `branding/${id}_bg_${Date.now()}.jpg`;
       const imageKey = await uploadBrandingToAzure(file.buffer, fileName);
@@ -165,7 +233,6 @@ export const updateTenant = async (req: Request, res: Response) => {
         overlayColor: overlayColor
       };
     } else if (overlayColor) {
-      // Update only color if no file
       const current = await prisma.tenant.findUnique({ where: { id } });
       updateData.branding = {
         ...(current?.branding as object),
@@ -184,14 +251,27 @@ export const updateTenant = async (req: Request, res: Response) => {
   }
 };
 
-// 4. DELETE TENANT
 export const deleteTenant = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const { id: tenantId } = req.params;
+
   try {
-    // Note: This will fail if there are Users/Logs linked (Foreign Key constraint)
-    await prisma.tenant.delete({ where: { id } });
-    res.json({ message: "Tenant deleted successfully" });
+    await prisma.$transaction([
+      prisma.log.deleteMany({ where: { tenantId } }),
+
+      prisma.user.deleteMany({ where: { tenantId } }),
+
+      prisma.passwordReset.deleteMany({ where: { user: { tenantId } } }),
+
+      prisma.tenant.delete({ where: { id: tenantId } }),
+    ]);
+
+    res.json({ 
+      message: "Tenant and all associated users and logs have been purged successfully." 
+    });
   } catch (error: any) {
-    res.status(500).json({ error: "Delete failed. Ensure tenant has no active users." });
+    console.error("DELETE_TENANT_ERROR:", error);
+    res.status(500).json({ 
+      error: "Failed to delete tenant. An internal error occurred during the purge." 
+    });
   }
 };
