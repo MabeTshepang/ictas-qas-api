@@ -14,6 +14,7 @@ import userRoutes from './routes/user.routes';
 import router from './routes/user.routes';
 import { getPublicTenants } from './controllers/tenant.controller';
 import { authLimiter } from './middleware/rate-limiter';
+import prisma from './config/db';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',') 
@@ -21,12 +22,9 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 const app = express();
 
-// --- 1. Global Middleware ---
-
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
@@ -38,33 +36,47 @@ app.use(cors({
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true // Required if you decide to use cookies later
+  credentials: true
 }));
 app.use(express.json());
 
-// 1. Public Auth (Stays in main app or auth.routes)
 app.post('/api/auth/login', authLimiter, login);
 app.post('/api/auth/forgot-password', authLimiter, requestReset); 
 app.post('/api/auth/reset-password', authLimiter, resetPassword);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.get('/api/tenants/public', getPublicTenants);
 
-// 2. Mount Routers
-// This preserves /api/admin/...
+
 app.use('/api/admin', adminRoutes);
 
-// This preserves /api/upload, /api/my-logs, etc.
 app.use('/api', userRoutes);
 
-// This preserves /api/tenants/public and /tenants
 app.use('/api/tenants', tenantRoutes);
 
-// --- 6. Error Handling ---
 app.use(globalErrorHandler);
 
+async function checkDatabaseConnection() {
+  try {
+    console.log('⏳ Attempting to connect to Azure MySQL via MariaDB Adapter...');
+    
+    await prisma.$connect();
+    
+    await prisma.$queryRaw`SELECT 1`;
+    
+    console.log('Database connection verified.');
+  } catch (error) {
+    console.error('DATABASE CONNECTION ERROR:');
+    console.error(error);
+    
+    process.exit(1); 
+  }
+}
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+
+app.listen(PORT, async () => {
   console.log(`🚀 Multi-Tenant API running on port ${PORT}`);
+  await checkDatabaseConnection();
 });
 
 export default app;

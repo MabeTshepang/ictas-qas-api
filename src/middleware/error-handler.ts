@@ -14,6 +14,6 @@ export const globalErrorHandler = (err: any, req: Request, res: Response, next: 
 
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',
-    tenantId: req.user?.tenantId // Useful for debugging multi-tenant issues
+    tenantId: (req as any).user?.id // Useful for debugging multi-tenant issues
   });
 };

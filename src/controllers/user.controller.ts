@@ -48,7 +48,6 @@ export const getAllUsers = async (req: Request, res: Response) => {
   const { tenantId, role } = (req as AuthRequest).user;
 
   const users = await prisma.user.findMany({
-    // Moderators see everyone, Admins see their tenant
     where: role === 'MODERATOR' ? {} : { tenantId },
     select: { 
       id: true, 
@@ -56,7 +55,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
       role: true, 
       createdAt: true,
       fullName: true,
-      tenant: { select: { name: true } } // Joins the tenant name
+      tenant: { select: { name: true } } 
     }
   });
   res.json(users);
@@ -68,12 +67,10 @@ export const updateUser = async (req: Request, res: Response) => {
   const { tenantId, role } = (req as AuthRequest).user;
 
   try {
-    // In Prisma, we use 'update' with a composite where clause if possible, 
-    // or verify existence first.
+
     const user = await prisma.user.update({
       where: { 
         id,
-        // Isolation: Admins can't update users outside their tenant
         ...(role !== 'MODERATOR' ? { tenantId } : {}) 
       },
       data: { email, role: targetRole }
@@ -102,7 +99,6 @@ export const deleteUser = async (req: Request, res: Response) => {
 };
 
 export const getMyLogs = async (req: Request, res: Response) => {
-  // Extract userId and tenantId from the auth middleware
   const { id: userId, tenantId } = (req as any).user;
 
   try {
@@ -123,7 +119,7 @@ export const getMyLogs = async (req: Request, res: Response) => {
       orderBy: {
         createdAt: 'desc',
       },
-      take: 50, // Limit to the last 50 entries for the dashboard view
+      take: 50,
     });
 
     res.json(logs);
@@ -207,7 +203,6 @@ export const inviteModerator = async (req: Request, res: Response) => {
     });    
     res.status(201).json(newMod);
   } catch (error: any) {
-    // Check if it's a Zod error to provide better feedback
     if (error instanceof z.ZodError) {
       return res.status(400).json({ 
         error: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ') 

@@ -9,7 +9,6 @@ export default defineConfig({
     url: process.env.DATABASE_URL,
   },
   migrations: {
-    // Explicitly use ts-node to run the file
     seed: 'npx ts-node ./prisma/seed.ts'
   }
 });

@@ -125,7 +125,7 @@ export const getModDashboardStats = async (req: Request, res: Response) => {
         id: true
       },
       where: {
-        action: 'File Upload' // Only count file-related events
+        action: 'File Upload'
       }
     });
 
@@ -172,10 +172,7 @@ try {
     const tenant = await tx.tenant.create({
         data: {
         name,
-        branding: {
-            imageKey,
-            overlayColor: overlayColor || "from-slate-900/80 to-black/80",
-        },
+        branding: JSON.stringify({ imageKey, overlayColor }),
         fileSlug: ""
         }
     });
@@ -233,11 +230,12 @@ export const updateTenant = async (req: Request, res: Response) => {
         overlayColor: overlayColor
       };
     } else if (overlayColor) {
-      const current = await prisma.tenant.findUnique({ where: { id } });
-      updateData.branding = {
-        ...(current?.branding as object),
+        const current = await prisma.tenant.findUnique({ where: { id } });
+        const existingBranding = JSON.parse((current?.branding as string) || '{}');
+        updateData.branding = JSON.stringify({
+        ...existingBranding,
         overlayColor
-      };
+        });
     }
 
     const updated = await prisma.tenant.update({

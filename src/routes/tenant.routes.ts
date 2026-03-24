@@ -6,9 +6,8 @@ import multer from 'multer';
 const router = Router();
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 } 
 });
-// Protected Moderator access
 router.use(authenticate);
 
 router.get('/logs', authenticate, authorize(['MODERATOR', 'ADMIN']), getAllTenantLogs);

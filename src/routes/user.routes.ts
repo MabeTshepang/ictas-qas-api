@@ -12,24 +12,19 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
-// Protect all routes here
 router.use(authenticate);
 
-// Account & Profile
 router.patch('/user/password', updatePassword);
 
-// Document Pipeline (Frontend: /api/upload, /api/logs/...)
 router.post('/upload', upload.single('file'), handleUpload);
 router.post('/logs/:logId/re-email', reEmailLog);
 router.patch('/logs/:logId', updateLog);
 
-// Discovery
 router.get('/files', getFiles);
 router.get('/files/:id', getFileDetails);
-router.get('/my-logs', getMyLogs); // Path: /api/my-logs
+router.get('/my-logs', getMyLogs); 
 router.post('/logs', createLog);
 
-// Admin-only cleanup within the /api/files path
 router.delete('/files/:id', authorize(['ADMIN']), deleteFileRecord);
 
 export default router;

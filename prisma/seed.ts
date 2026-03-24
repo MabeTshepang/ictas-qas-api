@@ -1,20 +1,21 @@
 import { PrismaClient, Role, TenantStatus, TenantType } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import * as argon2 from 'argon2';
+import * as dotenv from 'dotenv';
 
+dotenv.config();
 const adapter = new PrismaMariaDb({
-  host: 'localhost',
+  host: process.env.DB_HOST || 'ictasbw-db.mysql.database.azure.com',
   port: 3306,
-  user: 'ictas-admin',
-  password: 'spectrumcs@2026',
-  database: 'ictas'
+  user: process.env.DB_USER || 'ictas_admin',
+  password: process.env.DB_PASSWORD || 'spectrumcs@2026',
+  database: process.env.DB_NAME || 'ictas',
+  ssl: true
 });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('--- Starting Full Database Seed ---');
 
-  // 1. SEED TENANTS
   const tenants = [
     {
       id: 'cmmugsbjb0000cwo8axmn52ul',
@@ -63,7 +64,6 @@ async function main() {
   }
   console.log('✅ All Tenants seeded.');
 
-  // 2. SEED USERS
   const users = [
     { id: 'cmmugsbkf0003cwo8hskh46s7', fullName: 'System Moderator', email: 'mod@spectrum.com', passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$P1M2aYRRmpXzYbUP/ezz8g$V0acq0W0ew2X74Lk+kXneLB04y2+NKFLNz7y+rhtdyU', role: Role.MODERATOR, tenantId: 'cmmugsbjb0000cwo8axmn52ul' },
     { id: 'cmmugsbkn0004cwo81d07f2ef', fullName: 'BAMB Administrator', email: 'admin@bamb.co.bw', passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$P1M2aYRRmpXzYbUP/ezz8g$V0acq0W0ew2X74Lk+kXneLB04y2+NKFLNz7y+rhtdyU', role: Role.ADMIN, tenantId: 'cmmugsbjy0001cwo8j9bhdwsh' },
@@ -82,7 +82,6 @@ async function main() {
   }
   console.log('✅ All Users seeded.');
 
-  // 3. SEED LOGS (Sample batch including Login and File Uploads)
   await prisma.log.createMany({
     data: [
       { id: 'cmmui35gd0000tko8lneee6o8', userId: 'cmmugsbkn0004cwo81d07f2ef', action: 'User Login', status: 'Sent', tenantId: 'cmmugsbjy0001cwo8j9bhdwsh', createdAt: new Date('2026-03-17 10:59:46.893') },

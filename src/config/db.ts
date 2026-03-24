@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import * as dotenv from 'dotenv';
-import { hostname } from 'os';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -13,7 +14,10 @@ const adapter = new PrismaMariaDb({
   user: process.env.DB_USER || 'ictas_admin',
   password: process.env.DB_PASSWORD || 'spectrumcs@2026',
   database: process.env.DB_NAME || 'ictas',
-  ssl: true
+  ssl: {
+      ca: fs.readFileSync(path.join(process.cwd(), 'certs', 'azure-ca.pem')).toString(),
+      
+  }
 });
 
 export const prisma =

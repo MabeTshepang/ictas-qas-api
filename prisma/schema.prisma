@@ -7,7 +7,7 @@ datasource db {
 }
 
 model log {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String
   action    String
   status    String
@@ -21,23 +21,25 @@ model log {
   @@index([tenantId, createdAt], map: "Log_tenantId_createdAt_idx")
   @@index([userId], map: "Log_userId_fkey")
 }
-
-model passwordreset {
-  id        String   @id
+model PasswordReset {
+  id        String   @id @default(cuid())
   token     String   @unique(map: "PasswordReset_token_key")
   userId    String
   tenantId  String
   expiresAt DateTime
   createdAt DateTime @default(now())
+  
   tenant    tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, map: "PasswordReset_tenantId_fkey")
   user      user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "PasswordReset_userId_fkey")
 
   @@index([tenantId], map: "PasswordReset_tenantId_idx")
   @@index([userId], map: "PasswordReset_userId_fkey")
+  
+  @@map("passwordreset") 
 }
 
 model tenant {
-  id            String          @id
+  id            String          @id @default(cuid())
   name          String
   subtitle      String?
   status        tenant_status   @default(ACTIVE)
@@ -46,12 +48,12 @@ model tenant {
   fileSlug      String
   createdAt     DateTime        @default(now())
   log           log[]
-  passwordreset passwordreset[]
-  user          user[]
+  passwordResets PasswordReset[]
+  users          user[]
 }
 
 model user {
-  id            String          @id
+  id            String          @id @default(cuid())
   fullName      String
   email         String          @unique(map: "User_email_key")
   passwordHash  String
@@ -59,7 +61,7 @@ model user {
   tenantId      String
   createdAt     DateTime        @default(now())
   log           log[]
-  passwordreset passwordreset[]
+  passwordResets PasswordReset[]
   tenant        tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade, map: "User_tenantId_fkey")
 
   @@index([tenantId], map: "User_tenantId_idx")

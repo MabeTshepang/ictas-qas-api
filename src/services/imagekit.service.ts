@@ -10,8 +10,6 @@ export const uploadToImageKit = async (fileBuffer: Buffer, originalName: string)
     const ext = path.extname(originalName).toLowerCase();
     const fileName = `tenant_bg_${Date.now()}${ext}`;
 
-    // Per the README: Use client.files.upload() 
-    // and wrap the Buffer in the toFile() helper
     const result = await imagekit.files.upload({
       file: await toFile(fileBuffer, fileName),
       fileName: fileName,

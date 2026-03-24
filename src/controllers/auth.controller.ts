@@ -14,7 +14,6 @@ export const login = async (req: Request, res: Response) => {
       include: { tenant: true } 
     });
     
-    // Ensure verifyPassword matches your actual utility name
     if (!user || !(await verifyPassword(user.passwordHash, password))) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -67,19 +66,17 @@ export const requestReset = async (req: Request, res: Response) => {
   const { email } = req.body;
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 
-  // Security: Always return success even if user doesn't exist to prevent email harvesting
   if (!user) {
     return res.json({ message: "If an account exists, a reset link has been sent." });
   }
 
   const token = crypto.randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + 3600000); // 1 hour
+  const expiresAt = new Date(Date.now() + 3600000); 
 
   await prisma.passwordReset.create({
     data: { token, userId: user.id, expiresAt, tenantId: user.tenantId }
   });
 
-  // Build the link using your .env variable
   const resetLink = `${process.env.FRONTEND_URL}/${user.tenantId}/reset-password?token=${token}`;
 
   await sendEmail({

@@ -6,7 +6,6 @@ import { Resend } from 'resend';
 import { getTenantInfo } from './tenant.controller';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-// Custom Request Interface
 interface AuthRequest extends Request {
   user: {
     id: string;
@@ -15,7 +14,6 @@ interface AuthRequest extends Request {
   };
 }
 
-// --- DASHBOARD & LISTING (READ) ---
 
 export const getFiles = async (req: Request, res: Response) => {
   const { tenantId, role, id: userId } = (req as AuthRequest).user;
@@ -23,14 +21,13 @@ export const getFiles = async (req: Request, res: Response) => {
   try {
     const files = await prisma.log.findMany({
       where: {
-        // MODERATORS see everything; ADMINS/USERS see only their tenant
         ...(role !== 'MODERATOR' ? { tenantId } : {}),
         ...(role === 'USER' ? { userId } : {})
       },
       include: {
-        tenant: { select: { name: true } } // Added so we know which tenant the log belongs to
+        tenant: { select: { name: true } } 
       },
-      orderBy: { createdAt: 'desc' }, // Changed from timestamp to createdAt
+      orderBy: { createdAt: 'desc' },
       take: 50 
     });
 
@@ -40,17 +37,11 @@ export const getFiles = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * Fetches all registered tenants (BAMB, ZAMACE, etc.)
- * Filters out the 'MODERATOR' tenant to keep the list focused on clients.
- */
-
 export const getDashboardStats = async (req: Request, res: Response) => {
   const { tenantId, role } = (req as any).user;
   const todayStart = startOfDay(new Date());
 
   try {
-    // Determine filter based on role
     const globalFilter = role === 'MODERATOR' ? {} : { tenantId };
 
     const [totalStats, todayStats] = await Promise.all([
@@ -65,11 +56,6 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         _count: { _all: true }
       })
     ]);
-
-    /**
-     * Helper to map Prisma group results to our specific interface keys.
-     * Maps 'Sent' -> emailed, 'Failed' -> failed, etc.
-     */
     const mapStats = (statsArray: any[]) => {
       const getVal = (status: string) => 
         statsArray.find(s => s.status === status)?._count._all || 0;
@@ -79,7 +65,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       const pending = getVal('Pending');
       
       return {
-        uploaded: emailed + failed + pending, // Total uploads is the sum of all statuses
+        uploaded: emailed + failed + pending,
         emailed,
         pending,
         failed
@@ -98,7 +84,6 @@ export const getDashboardStats = async (req: Request, res: Response) => {
   }
 };
 
-// --- LOG/FILE MANAGEMENT (CRUD) ---
 
 export const getFileDetails = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -138,7 +123,6 @@ export const reEmailLog = async (req: Request, res: Response) => {
   const user = (req as any).user;
 
   try {
-    // 1. Find the log entry and verify ownership/tenant
     const log = await prisma.log.findFirst({
       where: { id: logId, tenantId: user.tenantId }
     });
@@ -147,16 +131,13 @@ export const reEmailLog = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Log or file record not found" });
     }
 
-    // 2. Download the encrypted buffer from Azure
     const fileBuffer = await downloadFromAzure(log.filePath);
     const tenant = await getTenantInfo(user.tenantId);
     
 
-    // 3. Resolve Recipients (Using the same logic as your upload)
     const receiver = process.env.RECEIVER_EMAIL; 
     const fileName = log.filePath.split('/').pop() || 'document.pdf';
 
-    // 4. Re-send via Resend
     const { error } = await resend.emails.send({
       from: `ICTAS ${tenant.name} <${process.env.SENDER_EMAIL}>`,
       to: [receiver || ''],
@@ -169,7 +150,6 @@ export const reEmailLog = async (req: Request, res: Response) => {
 
     if (error) throw new Error(error.message);
 
-    // 5. Update the log status to "Sent"
     await prisma.log.update({
       where: { id: logId },
       data: { status: 'Sent', action: 'File Upload' }
@@ -187,7 +167,6 @@ export const createLog = async (req: Request, res: Response) => {
   const { tenantId, id: userId } = (req as any).user;
   const { action, status, filePath, metadata } = req.body;
 
-  // Basic Validation
   if (!action || !status) {
     return res.status(400).json({ error: "Action and Status are required fields." });
   }
@@ -196,9 +175,9 @@ export const createLog = async (req: Request, res: Response) => {
     const newLog = await prisma.log.create({
       data: {
         action,
-        status, // e.g., 'Sent', 'Failed', 'Pending'
+        status, 
         filePath: filePath || null,
-        metadata: metadata || {}, // Any extra JSON data
+        metadata: metadata || {},
         tenantId,
         userId
       }
@@ -214,7 +193,6 @@ export const getLogs = async (req: Request, res: Response) => {
   const { tenantId, role } = (req as any).user;
 
   try {
-    // If Moderator, show all logs. If Admin/User, show only their tenant's logs.
     const whereClause = role === 'MODERATOR' ? {} : { tenantId };
 
     const logs = await prisma.log.findMany({
@@ -230,7 +208,7 @@ export const getLogs = async (req: Request, res: Response) => {
       orderBy: {
         createdAt: 'desc'
       },
-      take: 100 // Limit to latest 100 for performance
+      take: 100 
     });
 
     res.json(logs);
